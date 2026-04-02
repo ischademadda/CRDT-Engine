@@ -1,0 +1,41 @@
+sequenceDiagram
+        actor Browser as User (Browser)
+        participant WS as [DeliveryLayer] Websocket
+        participant ucl as [UseCaseLayer]
+        participant engine as [Domain Layer] Engine
+        participant DB as [Infrastructure Layer] DB
+        participant db_worker as DB_Batch_Worker
+        participant redis as [Infrastructure Layer] Redis
+
+        Browser->>WS: Delta [JSON]
+        WS->>WS: Validates JSON format
+        WS->>ucl: Delta [JSON]
+        ucl->>ucl: Checks: if this document in RAM?
+        
+        alt not in RAM
+                ucl->>DB: DB query
+                DB-->>ucl: returns: full document
+        end
+
+        ucl->>engine: Delta [JSON] + Document state
+        
+        loop Resolve Conflicts
+                engine->>engine:  Fugue Algorithm
+        end
+
+        engine-->>ucl: Resolved Delta
+
+        par Saving
+                ucl->>db_worker:[Resolved Delta]
+        and Local Sending
+                ucl->>WS:Send [Resolved Delta]
+        and Global Sending
+                ucl->>redis:Publish in document channel
+        end
+
+        loop if collected_delts = 10 OR timer = 5 then:
+                db_worker->>DB: Bulk INSERT 
+        end
+
+        
+        
