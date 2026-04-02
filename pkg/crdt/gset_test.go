@@ -1,26 +1,22 @@
 package crdt
 
 import (
-	"os"
+	"fmt"
 	"testing"
 )
 
-func TestGSet_ConcurrentAdd(t *testing.T) {
+func TestGSet_Merge(t *testing.T) {
 	gset := NewGSet[string]()
 	gset.Add("apple")
 	gset.Add("banana")
 	gset.Add("cherry")
 
-	gset_int := NewGSet[int]()
-	for i := 0; i < 100; i++ {
-		gset_int.Add(i)
-	}
+	gset2 := NewGSet[string]()
+	gset2.Add("apple")
+	gset2.Add("banana")
+	gset2.Add("orange")
+	gset2.Add("kiwi")
 
-	file, _ := os.Create("output.txt")
-	defer file.Close()
-
-	gset.WriteTo(file)
-	gset.WriteTo(os.Stdout)
-
-	gset_int.WriteTo(os.Stdout)
+	gset.Merge(gset2)
+	fmt.Println(gset.State())
 }
