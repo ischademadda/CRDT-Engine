@@ -1,15 +1,25 @@
-# ADR-0001: Repository structure
+# ADR-0002: Repository structure
 *Status*: Accepted
 
 ## Context
-For most engine compatibility and easy-to-integrate approach repository structure must be basic and follow standart rules of development
+For maximum engine compatibility and an easy-to-integrate approach, the repository structure must follow the Standard Go Project Layout conventions widely adopted by the community.
 
 ## Decision
-Implement Standard Go Project Layout with basics Go directories such as:
--  `/cmd` - Main applications for this project.
-- `/internal` - Private application and library code
-- `/pkg` - Engine core code
-- `docs/` - Documentation
+Implement the Standard Go Project Layout with the following directories:
+- `/cmd` — Main applications for this project (demo-app, CLI tools).
+- `/internal` — Private application and library code (WebSocket, Redis adapters).
+- `/pkg` — Engine core code (CRDT primitives, public API).
+- `/docs` — Architectural documentation (ADR, C4 diagrams, flow diagrams).
+
+## Consequences
+
+**Pros:**
+- Familiar structure for any Go developer — reduces onboarding time.
+- Clear separation between public API (`/pkg`) and private internals (`/internal`).
+- Go compiler enforces `/internal` package visibility rules.
+
+**Cons:**
+- Requires discipline to keep boundaries clean as the project grows.
 
 
 
