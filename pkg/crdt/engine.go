@@ -1,5 +1,7 @@
 package crdt
 
+import "fmt"
+
 // Operation — базовый интерфейс для любой CRDT-операции (CmRDT).
 // Каждая операция имеет тип (OpType) и глобально уникальный идентификатор (ID).
 type Operation interface {
@@ -17,6 +19,35 @@ type Operation interface {
 type OpID struct {
 	ReplicaID string
 	Counter   uint64
+}
+
+// Compare возвращает -1, 0 или 1 для детерминированного порядка.
+// Сначала сравнивает ReplicaID лексикографически, затем Counter.
+// Используется в Fugue для порядка siblings в дереве.
+func (id OpID) Compare(other OpID) int {
+	if id.ReplicaID < other.ReplicaID {
+		return -1
+	}
+	if id.ReplicaID > other.ReplicaID {
+		return 1
+	}
+	if id.Counter < other.Counter {
+		return -1
+	}
+	if id.Counter > other.Counter {
+		return 1
+	}
+	return 0
+}
+
+// IsZero возвращает true для нулевого (неинициализированного) идентификатора.
+func (id OpID) IsZero() bool {
+	return id.ReplicaID == "" && id.Counter == 0
+}
+
+// String возвращает строковое представление для отладки.
+func (id OpID) String() string {
+	return fmt.Sprintf("%s:%d", id.ReplicaID, id.Counter)
 }
 
 // CRDTNode — универсальный интерфейс для любого CRDT-типа данных.
