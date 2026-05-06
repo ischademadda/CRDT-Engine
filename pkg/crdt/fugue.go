@@ -77,7 +77,13 @@ type FugueTree struct {
 	mu        sync.RWMutex
 }
 
-// NewFugueTree создаёт пустое дерево Fugue для заданной реплики.
+// NewFugueTree returns an empty FugueTree owned by replicaID.
+//
+// replicaID must be unique across all replicas of the same document — it
+// becomes part of every [OpID] this replica generates and is what makes
+// concurrent operations totally orderable. A common choice is a stable
+// node identifier (hostname, container ID, or a UUID generated once per
+// process).
 func NewFugueTree(replicaID string) *FugueTree {
 	root := &FugueNode{
 		ID:    rootSentinelID,
@@ -158,8 +164,12 @@ func (ft *FugueTree) visibleNodes() []*FugueNode {
 
 // --- Локальные операции ---
 
-// InsertAt вставляет символ в позицию pos (0-indexed) и возвращает операцию.
-// pos=0 — вставка в начало, pos=len — вставка в конец.
+// InsertAt inserts char at the visible position pos (0-indexed, where 0 is
+// the start and Len() is the end) and returns the resulting [FugueInsertOp]
+// for broadcast to other replicas.
+//
+// pos refers to the visible character offset, ignoring tombstones. Returns
+// an error if pos is outside [0, Len()].
 func (ft *FugueTree) InsertAt(pos int, char rune) (FugueInsertOp, error) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
@@ -198,7 +208,12 @@ func (ft *FugueTree) InsertAt(pos int, char rune) (FugueInsertOp, error) {
 	return op, nil
 }
 
-// DeleteAt удаляет символ в позиции pos (0-indexed) и возвращает операцию.
+// DeleteAt marks the character at visible position pos as a tombstone and
+// returns the resulting [FugueDeleteOp] for broadcast.
+//
+// The node is kept in the tree (the CRDT contract requires it for
+// idempotent merges) but is excluded from [FugueTree.State] and from future
+// position math. Physical removal happens later via epoch-based GC.
 func (ft *FugueTree) DeleteAt(pos int) (FugueDeleteOp, error) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
@@ -221,14 +236,16 @@ func (ft *FugueTree) DeleteAt(pos int) (FugueDeleteOp, error) {
 
 // --- Применение удалённых операций ---
 
-// ApplyRemoteInsert применяет операцию вставки от другой реплики.
+// ApplyRemoteInsert applies an insert operation that arrived from another
+// replica. Idempotent: applying the same op twice is a no-op.
 func (ft *FugueTree) ApplyRemoteInsert(op FugueInsertOp) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
 	ft.applyInsert(op)
 }
 
-// ApplyRemoteDelete применяет операцию удаления от другой реплики.
+// ApplyRemoteDelete applies a delete operation that arrived from another
+// replica. Idempotent.
 func (ft *FugueTree) ApplyRemoteDelete(op FugueDeleteOp) {
 	ft.mu.Lock()
 	defer ft.mu.Unlock()
@@ -292,7 +309,7 @@ func (ft *FugueTree) applyDelete(op FugueDeleteOp) {
 
 // --- Публичные query-методы ---
 
-// ToString возвращает текущий текст документа (видимые символы в порядке обхода).
+// ToString returns the document text — visible characters in document order.
 func (ft *FugueTree) ToString() string {
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
@@ -306,7 +323,7 @@ func (ft *FugueTree) ToString() string {
 	return buf.String()
 }
 
-// Len возвращает количество видимых символов.
+// Len returns the number of visible (non-tombstone) characters.
 func (ft *FugueTree) Len() int {
 	ft.mu.RLock()
 	defer ft.mu.RUnlock()
@@ -334,7 +351,9 @@ func (ft *FugueTree) ApplyOperation(op Operation) error {
 	}
 }
 
-// Merge объединяет два дерева Fugue, применяя все отсутствующие узлы.
+// Merge pulls every node and tombstone from other into this tree, leaving
+// both replicas convergent. other must be a [*FugueTree]; passing any other
+// implementation of [CRDTNode] returns an error.
 func (ft *FugueTree) Merge(other CRDTNode[string]) error {
 	otherTree, ok := other.(*FugueTree)
 	if !ok {
