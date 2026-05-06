@@ -32,6 +32,28 @@ The repository follows the Standard Go Project Layout:
 
 ## Getting Started
 
-*(Add standard installation instructions here once the module is published)*
+### Quickest possible test (one machine, two browser tabs)
+
+```bash
+git clone https://github.com/ischademadda/CRDT-Engine && cd CRDT-Engine
+REDIS_ADDR= go run ./cmd/demo-app
+```
+
+Open `http://localhost:8080` in two tabs, click **Connect**, type. That's it.
+
+### Two-node cluster (Docker)
+
+```bash
+docker compose up --build
+```
+
+→ `http://localhost:8080` (node-a) and `http://localhost:8081` (node-b), both syncing through Redis.
+
+### Other scenarios — LAN, ngrok, manual multi-node
+
+See [TESTING.md](./TESTING.md) for the full walkthrough: testing across machines on the same Wi-Fi, exposing a public demo via ngrok, troubleshooting firewalls, and verifying non-interleaving.
+
+### As a library
+
 ```bash
 go get github.com/ischademadda/CRDT-Engine
