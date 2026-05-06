@@ -1,0 +1,22 @@
+# Игнор для docker build — уменьшает context и вырезает локальные артефакты.
+.git
+.github
+.claude
+.vscode
+.idea
+
+# Документы и mock-файлы не нужны в образе.
+docs/
+*.md
+!internal/README.md
+!pkg/crdt/README.md
+
+# Артефакты тестов / сборки.
+*.exe
+*.test
+*.out
+coverage.*
+
+# Локальные конфиги.
+.env
+.env.*

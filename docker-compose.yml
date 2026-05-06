@@ -1,0 +1,43 @@
+# Двух-узловой кластер: два инстанса demo-app синхронизируются через общий Redis.
+# Открой http://localhost:8080 и http://localhost:8081 в разных вкладках —
+# правки на одном инстансе долетят до другого через Redis Pub/Sub.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: crdt-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  node-a:
+    build: .
+    container_name: crdt-node-a
+    environment:
+      HTTP_ADDR: ":8080"
+      REDIS_ADDR: "redis:6379"
+      NODE_ID: "node-a"
+      DOC_ID: "demo"
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  node-b:
+    build: .
+    container_name: crdt-node-b
+    environment:
+      HTTP_ADDR: ":8080"
+      REDIS_ADDR: "redis:6379"
+      NODE_ID: "node-b"
+      DOC_ID: "demo"
+    ports:
+      - "8081:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
