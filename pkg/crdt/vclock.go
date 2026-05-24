@@ -7,56 +7,36 @@ import (
 )
 
 // VectorClock отслеживает каузальный порядок событий в распределённой системе.
-// Каждый узел (реплика) имеет свой счётчик, который монотонно растёт.
-//
-// Используется для:
-//   - Определения каузального порядка операций (happened-before)
-//   - Обнаружения конкурентных операций (neither happened-before the other)
-//   - Epoch-based GC: определение, когда томбстоун можно безопасно удалить
-//
-// Потокобезопасен через sync.RWMutex.
+// Каждая реплика имеет свой счётчик, который монотонно растёт при каждой локальной операции.
+// Используется для обнаружения конкурентных операций и (в будущем) Epoch-based GC томбстоунов.
 type VectorClock struct {
 	clocks map[string]uint64
 	mu     sync.RWMutex
 }
 
-// NewVectorClock создаёт пустой вектор часов.
 func NewVectorClock() *VectorClock {
-	return &VectorClock{
-		clocks: make(map[string]uint64),
-	}
+	return &VectorClock{clocks: make(map[string]uint64)}
 }
 
-// Increment увеличивает счётчик для данного узла на 1.
-// Вызывается при каждой локальной операции на узле.
 func (vc *VectorClock) Increment(replicaID string) {
 	vc.mu.Lock()
 	defer vc.mu.Unlock()
 	vc.clocks[replicaID]++
 }
 
-// Get возвращает текущее значение счётчика для данного узла.
 func (vc *VectorClock) Get(replicaID string) uint64 {
 	vc.mu.RLock()
 	defer vc.mu.RUnlock()
 	return vc.clocks[replicaID]
 }
 
-// Set устанавливает значение счётчика для данного узла.
 func (vc *VectorClock) Set(replicaID string, value uint64) {
 	vc.mu.Lock()
 	defer vc.mu.Unlock()
 	vc.clocks[replicaID] = value
 }
 
-// Merge объединяет два вектора часов, беря максимум по каждому компоненту.
-//
-// Математические свойства:
-//   - Коммутативность: merge(A,B) == merge(B,A)
-//   - Ассоциативность: merge(merge(A,B),C) == merge(A,merge(B,C))
-//   - Идемпотентность: merge(A,A) == A
-//
-// Это операция join (верхняя грань) в полурешётке — основа CvRDT.
+// Merge берёт максимум по каждому компоненту — это join в полурешётке (CvRDT).
 func (vc *VectorClock) Merge(other *VectorClock) {
 	other.mu.RLock()
 	snapshot := make(map[string]uint64, len(other.clocks))
@@ -67,7 +47,6 @@ func (vc *VectorClock) Merge(other *VectorClock) {
 
 	vc.mu.Lock()
 	defer vc.mu.Unlock()
-
 	for replicaID, otherVal := range snapshot {
 		if otherVal > vc.clocks[replicaID] {
 			vc.clocks[replicaID] = otherVal
@@ -75,24 +54,16 @@ func (vc *VectorClock) Merge(other *VectorClock) {
 	}
 }
 
-// Compare определяет каузальное отношение между двумя векторами часов.
-//
-// Возвращает:
-//   - CausalBefore:  vc < other (vc произошло раньше other)
-//   - CausalAfter:   vc > other (vc произошло позже other)
-//   - CausalEqual:   vc == other (идентичные)
-//   - CausalConcurrent: конкурентные (нет каузальной связи)
+// Compare определяет каузальное отношение: Before, After, Equal или Concurrent.
 func (vc *VectorClock) Compare(other *VectorClock) CausalOrder {
 	vc.mu.RLock()
 	defer vc.mu.RUnlock()
-
 	other.mu.RLock()
 	defer other.mu.RUnlock()
 
-	isLessOrEqual := true    // vc <= other по всем компонентам
-	isGreaterOrEqual := true // vc >= other по всем компонентам
+	lessOrEqual := true
+	greaterOrEqual := true
 
-	// Собираем все уникальные ключи из обоих векторов
 	allReplicas := make(map[string]struct{})
 	for k := range vc.clocks {
 		allReplicas[k] = struct{}{}
@@ -101,36 +72,31 @@ func (vc *VectorClock) Compare(other *VectorClock) CausalOrder {
 		allReplicas[k] = struct{}{}
 	}
 
-	// Сравниваем по каждому компоненту (отсутствующий ключ = 0)
 	for replicaID := range allReplicas {
-		myVal := vc.clocks[replicaID]
-		otherVal := other.clocks[replicaID]
-
-		if myVal > otherVal {
-			isLessOrEqual = false
+		my, their := vc.clocks[replicaID], other.clocks[replicaID]
+		if my > their {
+			lessOrEqual = false
 		}
-		if myVal < otherVal {
-			isGreaterOrEqual = false
+		if my < their {
+			greaterOrEqual = false
 		}
 	}
 
 	switch {
-	case isLessOrEqual && isGreaterOrEqual:
+	case lessOrEqual && greaterOrEqual:
 		return CausalEqual
-	case isLessOrEqual:
+	case lessOrEqual:
 		return CausalBefore
-	case isGreaterOrEqual:
+	case greaterOrEqual:
 		return CausalAfter
 	default:
 		return CausalConcurrent
 	}
 }
 
-// Copy возвращает глубокую копию вектора часов.
 func (vc *VectorClock) Copy() *VectorClock {
 	vc.mu.RLock()
 	defer vc.mu.RUnlock()
-
 	clone := NewVectorClock()
 	for k, v := range vc.clocks {
 		clone.clocks[k] = v
@@ -138,11 +104,9 @@ func (vc *VectorClock) Copy() *VectorClock {
 	return clone
 }
 
-// String возвращает строковое представление для отладки.
 func (vc *VectorClock) String() string {
 	vc.mu.RLock()
 	defer vc.mu.RUnlock()
-
 	parts := make([]string, 0, len(vc.clocks))
 	for k, v := range vc.clocks {
 		parts = append(parts, fmt.Sprintf("%s:%d", k, v))
@@ -150,16 +114,12 @@ func (vc *VectorClock) String() string {
 	return "{" + strings.Join(parts, ", ") + "}"
 }
 
-// CausalOrder описывает каузальное отношение между двумя событиями.
+// CausalOrder — результат сравнения двух векторных часов.
 type CausalOrder int
 
 const (
-	// CausalBefore означает, что первое событие произошло строго раньше второго.
-	CausalBefore CausalOrder = iota
-	// CausalAfter означает, что первое событие произошло строго позже второго.
-	CausalAfter
-	// CausalEqual означает, что события идентичны.
-	CausalEqual
-	// CausalConcurrent означает, что события конкурентны (нет каузальной связи).
-	CausalConcurrent
+	CausalBefore     CausalOrder = iota // vc произошло строго раньше
+	CausalAfter                         // vc произошло строго позже
+	CausalEqual                         // идентичные часы
+	CausalConcurrent                    // конкурентные события
 )

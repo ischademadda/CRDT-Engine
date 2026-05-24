@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(go version *)",
+      "Bash(go get *)",
+      "Bash(go test *)",
+      "Bash(go vet *)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git merge *)",
+      "Bash(git fetch *)",
+      "Bash(go build *)",
+      "Bash(REDIS_ADDR= HTTP_ADDR=:18181 go run ./cmd/demo-app)",
+      "Bash(curl -s http://localhost:18181/snapshot?doc=demo)",
+      "Bash(curl -s -o /dev/null -w \"index http=%{http_code}\\\\n\" http://localhost:18181/)",
+      "Bash(kill %1)",
+      "Bash(wait)",
+      "Bash(git branch *)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(docker build *)",
+      "WebFetch(domain:hub.docker.com)",
+      "Bash(go mod *)",
+      "WebSearch"
+    ]
+  }
+}
