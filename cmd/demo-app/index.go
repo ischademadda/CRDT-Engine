@@ -4,31 +4,425 @@ const indexHTML = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>CRDT-Engine demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CRDT-Engine Real-Time Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  body { font-family: -apple-system, system-ui, sans-serif; margin: 24px; max-width: 720px; }
-  h1 { font-size: 18px; margin-bottom: 4px; }
-  .meta { color: #666; font-size: 12px; margin-bottom: 16px; }
-  textarea { width: 100%; height: 320px; font-family: ui-monospace, Menlo, monospace;
-             font-size: 14px; padding: 12px; box-sizing: border-box; }
-  .status { font-size: 12px; color: #444; margin-top: 8px; }
-  .status.ok  { color: #2a7; }
-  .status.err { color: #c33; }
-  .row { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
-  input { padding: 6px 8px; font-size: 14px; }
+  :root {
+    --bg-base: #090d16;
+    --bg-surface: rgba(17, 24, 39, 0.7);
+    --bg-card: rgba(31, 41, 55, 0.5);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --text-primary: #f3f4f6;
+    --text-secondary: #9ca3af;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59, 130, 246, 0.2);
+    --success: #10b981;
+    --success-glow: rgba(16, 185, 129, 0.15);
+    --danger: #ef4444;
+    --danger-glow: rgba(239, 68, 68, 0.15);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background-color: var(--bg-base);
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.1) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+    background-attachment: fixed;
+    color: var(--text-primary);
+    font-family: 'Inter', -apple-system, sans-serif;
+    min-height: 100vh;
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .container {
+    width: 100%;
+    max-width: 1200px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 20px;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    background: linear-gradient(to right, #3b82f6, #10b981);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .meta {
+    color: var(--text-secondary);
+    font-size: 13px;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+
+  .main-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+  }
+
+  @media (max-width: 900px) {
+    .main-layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--bg-surface);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .form-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+  }
+
+  input {
+    background: rgba(17, 24, 39, 0.9);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+
+  input:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  button:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+  }
+
+  button:active {
+    transform: translateY(1px);
+  }
+
+  .status-badge {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+  }
+
+  .status-badge.ok {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+  }
+
+  textarea {
+    width: 100%;
+    height: 400px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 16px;
+    resize: none;
+    transition: border-color 0.2s;
+  }
+
+  textarea:focus {
+    border-color: rgba(59, 130, 246, 0.5);
+    outline: none;
+  }
+
+  textarea:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Analytics Dashboard Styles */
+  .dashboard-title {
+    font-size: 16px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+    transition: transform 0.2s;
+  }
+
+  .stat-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .stat-val {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .stat-val.chars { color: #60a5fa; }
+  .stat-val.inserts { color: #34d399; }
+  .stat-val.deletes { color: #f87171; }
+
+  .stat-lbl {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .leaders-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .section-subtitle {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    letter-spacing: 0.05em;
+  }
+
+  .leader-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  /* Custom scrollbar for list */
+  .leader-list::-webkit-scrollbar { width: 4px; }
+  .leader-list::-webkit-scrollbar-track { background: transparent; }
+  .leader-list::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+
+  .leader-card {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: all 0.2s;
+  }
+
+  .leader-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .leader-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+  }
+
+  .leader-name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    color: #e5e7eb;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .avatar-badge {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    color: white;
+  }
+
+  .leader-counts {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .count-inserts { color: #34d399; }
+  .count-deletes { color: #f87171; }
+
+  .bar-container {
+    height: 6px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+    display: flex;
+  }
+
+  .bar-ins { background: #10b981; height: 100%; }
+  .bar-del { background: #ef4444; height: 100%; }
+
+  .analytics-offline {
+    color: var(--text-secondary);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px 0;
+    border: 1px dashed var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .analytics-offline span {
+    font-weight: 600;
+    color: var(--danger);
+  }
 </style>
 </head>
 <body>
-<h1>CRDT-Engine demo</h1>
-<div class="meta">Open this page in two tabs (or two browsers) and edit simultaneously. Concurrent inserts at the same position will not interleave (Fugue).</div>
+<div class="container">
+  <header>
+    <div>
+      <h1>CRDT-Engine</h1>
+      <div class="meta">Алгоритм Fugue гарантирует отсутствие посимвольного переплетения при одновременной печати.</div>
+    </div>
+    <div class="controls-row">
+      <div class="form-group">
+        <span>документ:</span>
+        <input id="doc" value="demo" style="width: 100px;" />
+      </div>
+      <button id="connect">Подключиться</button>
+      <span id="status" class="status-badge">Отключен</span>
+    </div>
+  </header>
 
-<div class="row">
-  <label>doc: <input id="doc" value="demo" /></label>
-  <button id="connect">Connect</button>
-  <span id="status" class="status">disconnected</span>
+  <div class="main-layout">
+    <!-- Левая панель: Редактор -->
+    <div class="panel">
+      <textarea id="editor" placeholder="Сначала подключитесь к документу..." disabled></textarea>
+    </div>
+
+    <!-- Правая панель: Аналитика -->
+    <div class="panel">
+      <div class="dashboard-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+        Аналитика Документа
+      </div>
+
+      <!-- Live Dashboard -->
+      <div id="analytics-content" style="display: none; flex-direction: column; gap: 16px;">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-val chars" id="stat-chars">0</span>
+            <span class="stat-lbl">Символов</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-val inserts" id="stat-inserts">0</span>
+            <span class="stat-lbl">Вставок</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-val deletes" id="stat-deletes">0</span>
+            <span class="stat-lbl">Удалений</span>
+          </div>
+        </div>
+
+        <div class="leaders-section">
+          <span class="section-subtitle">Рейтинг участников</span>
+          <div class="leader-list" id="leader-list">
+            <!-- Сюда вставляется рейтинг -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Offline placeholder -->
+      <div id="analytics-offline" class="analytics-offline">
+        <span>Аналитика недоступна</span>
+        Подключитесь к документу для сбора метрик.
+      </div>
+    </div>
+  </div>
 </div>
-
-<textarea id="editor" placeholder="connect first..." disabled></textarea>
 
 <script>
 (function () {
@@ -36,20 +430,20 @@ const indexHTML = `<!doctype html>
   const $editor   = document.getElementById('editor');
   const $status   = document.getElementById('status');
   const $connect  = document.getElementById('connect');
+  const $analyticsContent = document.getElementById('analytics-content');
+  const $analyticsOffline = document.getElementById('analytics-offline');
+  const $leaderList       = document.getElementById('leader-list');
 
   let ws = null;
   let suppressInput = false;
   let lastValue = '';
+  let pollInterval = null;
 
   function setStatus(text, cls) {
     $status.textContent = text;
-    $status.className = 'status ' + (cls || '');
+    $status.className = 'status-badge ' + (cls || '');
   }
 
-  // Diff strategy: the textarea is a single source of local truth. On every
-  // 'input' we compute a single-char diff against lastValue and emit one
-  // intent. This is intentionally simple — Fugue's correctness does not
-  // depend on the granularity of intents, only on the resulting ops.
   function diff(prev, next) {
     if (next.length === prev.length + 1) {
       for (let i = 0; i < next.length; i++) {
@@ -78,30 +472,128 @@ const indexHTML = `<!doctype html>
   }
 
   function applyRemote(type, payload) {
-    // The remote payload is a Fugue op: we don't have a tree on the client,
-    // so we simply re-pull the snapshot. In a production client you'd keep
-    // a local CRDT replica; that's out of scope for this demo.
     const doc = $doc.value;
     refreshSnapshot(doc);
   }
 
+  // Генерация аватара на основе хэша имени реплики
+  function getAvatarStyle(name) {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash) % 360;
+    return "background: hsl(" + h + ", 70%, 45%);";
+  }
+
+  // Обновление дашборда на основе данных REST API
+  function renderAnalytics(data) {
+    $analyticsOffline.style.display = 'none';
+    $analyticsContent.style.display = 'flex';
+
+    document.getElementById('stat-chars').textContent = data.total_chars || 0;
+    document.getElementById('stat-inserts').textContent = data.total_inserts || 0;
+    document.getElementById('stat-deletes').textContent = data.total_deletes || 0;
+
+    $leaderList.innerHTML = '';
+    if (!data.replicas || data.replicas.length === 0) {
+      $leaderList.innerHTML = '<div style="font-size: 12px; color: var(--text-secondary); text-align: center; padding: 12px;">Пока нет активности</div>';
+      return;
+    }
+
+    data.replicas.forEach(rep => {
+      const card = document.createElement('div');
+      card.className = 'leader-card';
+
+      const total = rep.inserts + rep.deletes || 1;
+      const insPct = (rep.inserts / total) * 100;
+      const delPct = (rep.deletes / total) * 100;
+
+      const letter = rep.replica_id.substring(0, 2).toUpperCase();
+      const style = getAvatarStyle(rep.replica_id);
+
+      card.innerHTML = 
+        '<div class="leader-info">' +
+          '<span class="leader-name" title="' + rep.replica_id + '">' +
+            '<span class="avatar-badge" style="' + style + '">' + letter + '</span>' +
+            rep.replica_id +
+          '</span>' +
+          '<div class="leader-counts">' +
+            '<span class="count-inserts">+' + rep.inserts + '</span>' +
+            '<span class="count-deletes">-' + rep.deletes + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="bar-container">' +
+          '<div class="bar-ins" style="width: ' + insPct + '%"></div>' +
+          '<div class="bar-del" style="width: ' + delPct + '%"></div>' +
+        '</div>';
+      $leaderList.appendChild(card);
+    });
+  }
+
+  // Опрос API аналитики
+  function startAnalyticsPolling(doc) {
+    if (pollInterval) clearInterval(pollInterval);
+    
+    const poll = () => {
+      fetch('http://localhost:8082/api/analytics/' + encodeURIComponent(doc))
+        .then(r => {
+          if (!r.ok) throw new Error();
+          return r.json();
+        })
+        .then(data => {
+          renderAnalytics(data);
+        })
+        .catch(() => {
+          $analyticsContent.style.display = 'none';
+          $analyticsOffline.style.display = 'block';
+          $analyticsOffline.innerHTML = '<span>Аналитика offline</span>Сервер аналитики недоступен на порту 8082.';
+        });
+    };
+
+    poll();
+    pollInterval = setInterval(poll, 2000);
+  }
+
+  function stopAnalyticsPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    $analyticsContent.style.display = 'none';
+    $analyticsOffline.style.display = 'block';
+    $analyticsOffline.innerHTML = '<span>Аналитика отключена</span>Подключитесь к документу для сбора метрик.';
+  }
+
   $connect.addEventListener('click', () => {
-    if (ws) { ws.close(); ws = null; }
+    if (ws) { 
+      ws.close(); 
+      ws = null; 
+      stopAnalyticsPolling();
+      return; 
+    }
     const doc = $doc.value || 'demo';
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const url = proto + '://' + location.host + '/ws?doc=' + encodeURIComponent(doc);
     ws = new WebSocket(url);
 
     ws.addEventListener('open', async () => {
-      setStatus('connected', 'ok');
+      setStatus('Подключен', 'ok');
       $editor.disabled = false;
       await refreshSnapshot(doc);
+      startAnalyticsPolling(doc);
+      $connect.textContent = 'Отключиться';
     });
     ws.addEventListener('close', () => {
-      setStatus('disconnected', 'err');
+      setStatus('Отключен', 'err');
       $editor.disabled = true;
+      stopAnalyticsPolling();
+      $connect.textContent = 'Подключиться';
     });
-    ws.addEventListener('error', () => setStatus('error', 'err'));
+    ws.addEventListener('error', () => {
+      setStatus('Ошибка', 'err');
+      stopAnalyticsPolling();
+    });
     ws.addEventListener('message', (ev) => {
       try {
         const m = JSON.parse(ev.data);
