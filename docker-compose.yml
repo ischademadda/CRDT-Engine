@@ -41,3 +41,36 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+
+  analytics-db:
+    image: postgres:16-alpine
+    container_name: crdt-analytics-db
+    environment:
+      POSTGRES_USER: crdt
+      POSTGRES_PASSWORD: crdt_password
+      POSTGRES_DB: crdt_analytics
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crdt -d crdt_analytics"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: cmd/analytics-service/Dockerfile
+    container_name: crdt-analytics-service
+    environment:
+      REDIS_ADDR: "redis:6379"
+      DB_DSN: "postgres://crdt:crdt_password@analytics-db:5432/crdt_analytics?sslmode=disable"
+      HTTP_ADDR: ":8082"
+    ports:
+      - "8082:8082"
+    depends_on:
+      redis:
+        condition: service_healthy
+      analytics-db:
+        condition: service_healthy
+
