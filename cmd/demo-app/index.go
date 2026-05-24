@@ -437,6 +437,7 @@ const indexHTML = `<!doctype html>
   let ws = null;
   let suppressInput = false;
   let lastValue = '';
+  let lastSyncedValue = '';
   let pollInterval = null;
 
   function setStatus(text, cls) {
@@ -461,13 +462,85 @@ const indexHTML = `<!doctype html>
     return null;
   }
 
+  function getSingleChange(before, after) {
+    if (before === after) return null;
+    
+    let prefixLen = 0;
+    while (prefixLen < before.length && prefixLen < after.length && before[prefixLen] === after[prefixLen]) {
+      prefixLen++;
+    }
+    
+    let suffixLen = 0;
+    while (suffixLen < before.length - prefixLen && suffixLen < after.length - prefixLen && 
+           before[before.length - 1 - suffixLen] === after[after.length - 1 - suffixLen]) {
+      suffixLen++;
+    }
+    
+    const added = after.slice(prefixLen, after.length - suffixLen);
+    const removed = before.slice(prefixLen, before.length - suffixLen);
+    
+    return {
+      index: prefixLen,
+      added: added,
+      removed: removed
+    };
+  }
+
   async function refreshSnapshot(doc) {
     const r = await fetch('/snapshot?doc=' + encodeURIComponent(doc));
     if (!r.ok) return;
     const j = await r.json();
+    const newText = j.text || '';
+    
+    const oldText = lastSyncedValue;
+    const currentText = $editor.value;
+    
+    const remote = getSingleChange(oldText, newText);
+    lastSyncedValue = newText;
+    
+    if (!remote) {
+      // Никаких изменений на сервере нет, или они идентичны текущему состоянию
+      return;
+    }
+    
+    let mergedText = currentText;
+    const start = $editor.selectionStart;
+    const end = $editor.selectionEnd;
+    
+    let newStart = start;
+    let newEnd = end;
+    
+    // Применение удаленной вставки
+    if (remote.added.length > 0) {
+      const insertIndex = remote.index;
+      mergedText = currentText.slice(0, insertIndex) + remote.added + currentText.slice(insertIndex);
+      
+      if (insertIndex <= start) {
+        newStart += remote.added.length;
+      }
+      if (insertIndex <= end) {
+        newEnd += remote.added.length;
+      }
+    }
+    
+    // Применение удаленного удаления
+    if (remote.removed.length > 0) {
+      const deleteIndex = remote.index;
+      const deleteLen = remote.removed.length;
+      mergedText = currentText.slice(0, deleteIndex) + currentText.slice(deleteIndex + deleteLen);
+      
+      if (deleteIndex < start) {
+        newStart -= Math.min(deleteLen, start - deleteIndex);
+      }
+      if (deleteIndex < end) {
+        newEnd -= Math.min(deleteLen, end - deleteIndex);
+      }
+    }
+    
     suppressInput = true;
-    $editor.value = j.text || '';
-    lastValue = $editor.value;
+    $editor.value = mergedText;
+    lastValue = mergedText;
+    $editor.setSelectionRange(newStart, newEnd);
     suppressInput = false;
   }
 
@@ -569,6 +642,8 @@ const indexHTML = `<!doctype html>
     if (ws) { 
       ws.close(); 
       ws = null; 
+      lastSyncedValue = '';
+      lastValue = '';
       stopAnalyticsPolling();
       return; 
     }
