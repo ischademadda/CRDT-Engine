@@ -87,8 +87,13 @@ func main() {
 	log.Println("analytics service stopped gracefully. Bye!")
 }
 
+type StatsRecorder interface {
+	RecordInsert(ctx context.Context, docID string, replicaID string) error
+	RecordDelete(ctx context.Context, docID string, replicaID string) error
+}
+
 // runRedisPatternConsumer подписывается на паттерн crdt:doc:* и обрабатывает дельты в фоне.
-func runRedisPatternConsumer(ctx context.Context, client goredis.UniversalClient, adb *AnalyticsDB) {
+func runRedisPatternConsumer(ctx context.Context, client goredis.UniversalClient, adb StatsRecorder) {
 	pubsub := client.PSubscribe(ctx, "crdt:doc:*")
 	defer pubsub.Close()
 
