@@ -183,6 +183,52 @@ func (ft *FugueTree) DeleteAt(pos int) (FugueDeleteOp, error) {
 	return op, nil
 }
 
+// InsertAtWithReplica вставляет символ на видимую позицию pos (0-indexed) от имени конкретной реплики.
+func (ft *FugueTree) InsertAtWithReplica(pos int, char rune, replicaID string) (FugueInsertOp, error) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
+	visible := ft.visibleNodes()
+	if pos < 0 || pos > len(visible) {
+		return FugueInsertOp{}, errors.New("insert position out of range")
+	}
+
+	var leftOrigin, rightOrigin *FugueNode
+	if pos == 0 {
+		leftOrigin = ft.root
+	} else {
+		leftOrigin = visible[pos-1]
+	}
+	if pos < len(visible) {
+		rightOrigin = visible[pos]
+	}
+
+	parentID, side := ft.selectParent(leftOrigin, rightOrigin)
+	ft.counter++
+	newID := OpID{ReplicaID: replicaID, Counter: ft.counter}
+	op := FugueInsertOp{NodeID: newID, Value: char, ParentID: parentID, Side: side}
+	ft.applyInsert(op)
+	return op, nil
+}
+
+// DeleteAtWithReplica помечает символ на позиции pos томбстоуном от имени конкретной реплики.
+func (ft *FugueTree) DeleteAtWithReplica(pos int, replicaID string) (FugueDeleteOp, error) {
+	ft.mu.Lock()
+	defer ft.mu.Unlock()
+
+	visible := ft.visibleNodes()
+	if pos < 0 || pos >= len(visible) {
+		return FugueDeleteOp{}, errors.New("delete position out of range")
+	}
+
+	target := visible[pos]
+	ft.counter++
+	deleteID := OpID{ReplicaID: replicaID, Counter: ft.counter}
+	op := FugueDeleteOp{TargetID: target.ID, SourceID: deleteID}
+	ft.applyDelete(op)
+	return op, nil
+}
+
 // ApplyRemoteInsert применяет операцию вставки от другой реплики. Идемпотентен.
 func (ft *FugueTree) ApplyRemoteInsert(op FugueInsertOp) {
 	ft.mu.Lock()

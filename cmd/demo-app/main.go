@@ -219,7 +219,16 @@ const (
 )
 
 func (d *dispatcher) handleClientMsg(ctx context.Context, msg websocket.Message) error {
-	tree, err := d.repo.GetOrCreate(ctx, msg.DocumentID, d.nodeID)
+	if msg.SenderRole == "viewer" {
+		return errors.New("forbidden: viewer role is read-only (RBAC)")
+	}
+
+	replicaID := msg.SenderID
+	if replicaID == "" {
+		replicaID = d.nodeID
+	}
+
+	tree, err := d.repo.GetOrCreate(ctx, msg.DocumentID, replicaID)
 	if err != nil {
 		return err
 	}
@@ -234,7 +243,7 @@ func (d *dispatcher) handleClientMsg(ctx context.Context, msg websocket.Message)
 		if len(runes) == 0 {
 			return errors.New("empty char")
 		}
-		op, err := tree.InsertAt(in.Pos, runes[0])
+		op, err := tree.InsertAtWithReplica(in.Pos, runes[0], replicaID)
 		if err != nil {
 			return err
 		}
@@ -252,7 +261,7 @@ func (d *dispatcher) handleClientMsg(ctx context.Context, msg websocket.Message)
 		if err := json.Unmarshal(msg.Payload, &in); err != nil {
 			return err
 		}
-		op, err := tree.DeleteAt(in.Pos)
+		op, err := tree.DeleteAtWithReplica(in.Pos, replicaID)
 		if err != nil {
 			return err
 		}

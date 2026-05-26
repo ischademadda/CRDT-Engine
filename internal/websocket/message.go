@@ -12,4 +12,5 @@ type Message struct {
 	Type       string          `json:"type"`
 	Payload    json.RawMessage `json:"payload"`
 	SenderID   string          `json:"sender_id,omitempty"`
+	SenderRole string          `json:"sender_role,omitempty"`
 }

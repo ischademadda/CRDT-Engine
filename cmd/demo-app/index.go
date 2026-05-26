@@ -452,24 +452,269 @@ const indexHTML = `<!doctype html>
     padding: 12px;
     resize: none;
   }
+
+  /* --- AUTH / RBAC REALM --- */
+  .auth-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(6, 9, 18, 0.94);
+    backdrop-filter: blur(16px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+  }
+  .auth-card {
+    background: rgba(17, 24, 39, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 32px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+  }
+  .auth-title {
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    background: linear-gradient(to right, #3b82f6, #10b981);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .auth-subtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+  .auth-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .auth-field label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .auth-field select {
+    background: rgba(9, 13, 22, 0.9);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+  }
+  .auth-field select:focus {
+    border-color: var(--accent);
+  }
+  .auth-btn {
+    background: linear-gradient(to right, #3b82f6, #10b981);
+    border: none;
+    border-radius: 8px;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    color: white;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+  }
+  .auth-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  }
+  
+  .session-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 10px;
+  }
+  .jwt-badge {
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .jwt-badge:hover {
+    background: rgba(139, 92, 246, 0.3);
+    transform: translateY(-1px);
+  }
+  
+  .jwt-modal {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(4, 6, 12, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .jwt-modal-card {
+    background: #0f172a;
+    border: 1px solid var(--border-color);
+    border-radius: 16px;
+    padding: 24px;
+    width: 100%;
+    max-width: 550px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .jwt-part {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-color);
+    word-break: break-all;
+    line-height: 1.4;
+  }
+  .jwt-header { color: #f87171; }
+  .jwt-payload { color: #60a5fa; }
+  .jwt-signature { color: #34d399; }
+
+  .forbidden-banner {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: #fca5a5;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
 </style>
 </head>
 <body>
+
+<!-- AUTH OVERLAY -->
+<div id="auth-overlay" class="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-title">🔐 Вход в CRDT-Engine</div>
+    <div class="auth-subtitle">Академическая демонстрация ролевого доступа (RBAC) и JWT-авторизации для защиты документов.</div>
+    
+    <div class="auth-field">
+      <label>Имя пользователя (Replica ID):</label>
+      <input id="auth-username" value="Ivan" placeholder="Например: Ivan, Maria" />
+    </div>
+
+    <div class="auth-field">
+      <label>Роль доступа (RBAC):</label>
+      <select id="auth-role">
+        <option value="editor">Editor (Полный доступ на запись)</option>
+        <option value="viewer">Viewer (Только чтение)</option>
+      </select>
+    </div>
+
+    <div class="auth-field">
+      <label>Пароль:</label>
+      <input type="password" id="auth-password" value="admin" placeholder="Любой пароль" />
+    </div>
+
+    <button id="auth-submit-btn" class="auth-btn">Войти в систему</button>
+  </div>
+</div>
+
+<!-- JWT DETAILED MODAL -->
+<div id="jwt-modal" class="jwt-modal">
+  <div class="jwt-modal-card">
+    <div class="dashboard-title" style="justify-content: space-between;">
+      <span style="display:flex; align-items:center; gap:8px;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+        Дешифровка JWT Токена
+      </span>
+      <button id="jwt-close-btn" style="background:transparent; border:none; color:var(--text-secondary); font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+    
+    <div style="font-size: 13px; color: var(--text-secondary);">
+      Сгенерированный JWT токен сессии B2B Enterprise (подписан алгоритмом HS256):
+    </div>
+    
+    <div class="jwt-part" style="color: var(--text-primary); font-weight: 500;">
+      <span class="jwt-header" id="jwt-raw-header"></span>.<span class="jwt-payload" id="jwt-raw-payload"></span>.<span class="jwt-signature">mock_signature_crdt_engine_auth_service</span>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <span class="section-subtitle">Заголовок (JWT Header)</span>
+      <pre class="jwt-part jwt-header" id="jwt-decoded-header"></pre>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <span class="section-subtitle">Полезная нагрузка (JWT Payload / Claims)</span>
+      <pre class="jwt-part jwt-payload" id="jwt-decoded-payload"></pre>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      <span class="section-subtitle">Подпись (JWT Signature)</span>
+      <pre class="jwt-part jwt-signature">HMACSHA256(
+  base64UrlEncode(header) + "." +
+  base64UrlEncode(payload),
+  "crdt_secret_key_university_thesis"
+)</pre>
+    </div>
+  </div>
+</div>
+
 <div class="container">
   <header>
     <div>
-      <h1>CRDT-Engine</h1>
+      <h1>CRDT-Engine <span style="font-size:12px; font-weight:normal; color:var(--accent); vertical-align:middle; background:rgba(59,130,246,0.1); padding:2px 8px; border-radius:4px; margin-left:8px;">v0.4.5 (RBAC Active)</span></h1>
       <div class="meta">Алгоритм Fugue гарантирует отсутствие посимвольного переплетения при одновременной печати.</div>
     </div>
     <div class="controls-row">
-      <div class="form-group">
+      <!-- Session Info Display -->
+      <div class="session-info" id="session-info" style="display: none;">
+        <span class="jwt-badge" id="jwt-badge">JWT Active</span>
+        <span style="font-size: 13px; color: var(--text-secondary);">
+          <strong id="session-user" style="color: var(--text-primary);"></strong>
+          (<span id="session-role" style="font-weight:600;"></span>)
+        </span>
+        <button id="logout-btn" style="background:transparent; color:var(--danger); border:none; padding:0; cursor:pointer; font-size:12px; font-weight:600; margin-left:4px;">Выйти</button>
+      </div>
+
+      <div class="form-group" style="display: none;">
         <span>документ:</span>
         <input id="doc" value="demo" style="width: 100px;" />
       </div>
-      <button id="connect">Подключиться</button>
+      <button id="connect" style="display: none;">Подключиться</button>
       <span id="status" class="status-badge">Отключен</span>
     </div>
   </header>
+
+  <!-- FORBIDDEN BANNER -->
+  <div id="forbidden-banner" class="forbidden-banner">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--danger);"><polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86 7.86 2"></polygon><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+    <span><strong>Доступ ограничен:</strong> У вас роль Viewer. Изменения заблокированы сервером по политике безопасности RBAC.</span>
+  </div>
 
   <div class="main-layout">
     <!-- Левая панель: Редактор -->
@@ -896,49 +1141,159 @@ const indexHTML = `<!doctype html>
     }
   }
 
-  $timeSlider.addEventListener('input', updateSliderUI);
+  const $authOverlay = document.getElementById('auth-overlay');
+  const $authUsername = document.getElementById('auth-username');
+  const $authRole = document.getElementById('auth-role');
+  const $authPassword = document.getElementById('auth-password');
+  const $authSubmitBtn = document.getElementById('auth-submit-btn');
 
-  $checkoutBtn.addEventListener('click', () => {
-    const historicalText = $historyPreview.value;
-    $editor.value = historicalText;
+  const $sessionInfo = document.getElementById('session-info');
+  const $sessionUser = document.getElementById('session-user');
+  const $sessionRole = document.getElementById('session-role');
+  const $logoutBtn = document.getElementById('logout-btn');
+  const $jwtBadge = document.getElementById('jwt-badge');
+
+  const $jwtModal = document.getElementById('jwt-modal');
+  const $jwtCloseBtn = document.getElementById('jwt-close-btn');
+  const $jwtRawHeader = document.getElementById('jwt-raw-header');
+  const $jwtRawPayload = document.getElementById('jwt-raw-payload');
+  const $jwtDecodedHeader = document.getElementById('jwt-decoded-header');
+  const $jwtDecodedPayload = document.getElementById('jwt-decoded-payload');
+
+  const $forbiddenBanner = document.getElementById('forbidden-banner');
+
+  let currentUser = '';
+  let currentRole = '';
+  let currentToken = '';
+
+  function generateMockJWT(username, role) {
+    const headerObj = { alg: "HS256", typ: "JWT" };
+    const payloadObj = {
+      sub: username,
+      role: role,
+      iss: "crdt-auth-service",
+      exp: Math.floor(Date.now() / 1000) + 3600
+    };
     
-    const event = new Event('input', { bubbles: true });
-    $editor.dispatchEvent(event);
+    // Clean base64 helper (standard JWT format doesn't have '=')
+    const cleanB64 = (str) => btoa(unescape(encodeURIComponent(str))).replace(/=/g, '');
     
-    $timeSlider.value = revisionsList.length;
-    updateSliderUI();
+    const rawHeader = cleanB64(JSON.stringify(headerObj));
+    const rawPayload = cleanB64(JSON.stringify(payloadObj));
+    
+    return {
+      token: rawHeader + '.' + rawPayload + '.mock_signature_crdt_engine_auth_service',
+      rawHeader: rawHeader,
+      rawPayload: rawPayload,
+      headerJson: JSON.stringify(headerObj, null, 2),
+      payloadJson: JSON.stringify(payloadObj, null, 2)
+    };
+  }
+
+  $authSubmitBtn.addEventListener('click', () => {
+    const username = $authUsername.value.trim();
+    if (!username) {
+      alert('Пожалуйста, введите имя пользователя!');
+      return;
+    }
+    
+    currentUser = username;
+    currentRole = $authRole.value;
+    
+    const jwtData = generateMockJWT(currentUser, currentRole);
+    currentToken = jwtData.token;
+    
+    // Fill Decrypter Modal contents
+    $jwtRawHeader.textContent = jwtData.rawHeader;
+    $jwtRawPayload.textContent = jwtData.rawPayload;
+    $jwtDecodedHeader.textContent = jwtData.headerJson;
+    $jwtDecodedPayload.textContent = jwtData.payloadJson;
+    
+    // Update Header Display
+    $sessionUser.textContent = currentUser;
+    $sessionRole.textContent = currentRole === 'editor' ? 'Editor' : 'Viewer';
+    $sessionRole.style.color = currentRole === 'editor' ? '#10b981' : '#ef4444';
+    
+    $authOverlay.style.display = 'none';
+    $sessionInfo.style.display = 'flex';
+    
+    // Connect WebSocket
+    connectWS();
   });
 
-  $connect.addEventListener('click', () => {
-    if (ws) { 
-      ws.close(); 
-      ws = null; 
-      lastSyncedValue = '';
-      lastValue = '';
-      stopAnalyticsPolling();
-      stopHistoryPolling();
-      return; 
+  $logoutBtn.addEventListener('click', () => {
+    if (ws) {
+      ws.close();
+      ws = null;
     }
+    
+    currentUser = '';
+    currentRole = '';
+    currentToken = '';
+    
+    lastSyncedValue = '';
+    lastValue = '';
+    
+    $editor.value = '';
+    $editor.disabled = true;
+    
+    $sessionInfo.style.display = 'none';
+    $authOverlay.style.display = 'flex';
+    $forbiddenBanner.style.display = 'none';
+    
+    stopAnalyticsPolling();
+    stopHistoryPolling();
+  });
+
+  $jwtBadge.addEventListener('click', () => {
+    $jwtModal.style.display = 'flex';
+  });
+  
+  $jwtCloseBtn.addEventListener('click', () => {
+    $jwtModal.style.display = 'none';
+  });
+  
+  window.addEventListener('click', (ev) => {
+    if (ev.target === $jwtModal) {
+      $jwtModal.style.display = 'none';
+    }
+  });
+
+  function connectWS() {
     const doc = $doc.value || 'demo';
     const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const url = proto + '://' + location.host + '/ws?doc=' + encodeURIComponent(doc);
+    const url = proto + '://' + location.host + '/ws?doc=' + encodeURIComponent(doc) + 
+                '&username=' + encodeURIComponent(currentUser) + 
+                '&role=' + encodeURIComponent(currentRole);
+                
     ws = new WebSocket(url);
 
     ws.addEventListener('open', async () => {
       setStatus('Подключен', 'ok');
-      $editor.disabled = false;
+      
+      if (currentRole === 'viewer') {
+        $editor.disabled = true;
+        $editor.placeholder = "Режим Чтения (Viewer). Изменения ограничены политикой RBAC.";
+        $forbiddenBanner.style.display = 'flex';
+      } else {
+        $editor.disabled = false;
+        $editor.placeholder = "Начните вводить текст документа здесь...";
+        $forbiddenBanner.style.display = 'none';
+      }
+      
       await refreshSnapshot(doc);
       startAnalyticsPolling(doc);
       startHistoryPolling(doc);
-      $connect.textContent = 'Отключиться';
     });
+    
     ws.addEventListener('close', () => {
       setStatus('Отключен', 'err');
       $editor.disabled = true;
+      $forbiddenBanner.style.display = 'none';
       stopAnalyticsPolling();
       stopHistoryPolling();
-      $connect.textContent = 'Подключиться';
     });
+    
     ws.addEventListener('error', () => {
       setStatus('Ошибка', 'err');
       stopAnalyticsPolling();

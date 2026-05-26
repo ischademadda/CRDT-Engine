@@ -31,6 +31,7 @@ type Client struct {
 	conn       *websocket.Conn
 	send       chan Message
 	closed     atomic.Bool
+	role       string // "editor" or "viewer"
 }
 
 // readPump — горутина, читающая фреймы из сокета.
@@ -55,6 +56,7 @@ func (c *Client) readPump() {
 		}
 		// Принудительно проставляем идентификаторы — клиент не доверенный источник.
 		msg.SenderID = c.id
+		msg.SenderRole = c.role
 		msg.DocumentID = c.documentID
 		c.hub.inbound <- msg
 	}

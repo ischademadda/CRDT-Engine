@@ -29,16 +29,27 @@ func (h *Hub) HandleUpgrade(documentIDFn func(*http.Request) string) http.Handle
 			http.Error(w, "document id required", http.StatusBadRequest)
 			return
 		}
+
+		username := r.URL.Query().Get("username")
+		if username == "" {
+			username = newClientID()
+		}
+		role := r.URL.Query().Get("role")
+		if role == "" {
+			role = "editor"
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return
 		}
 		client := &Client{
-			id:         newClientID(),
+			id:         username,
 			documentID: docID,
 			hub:        h,
 			conn:       conn,
 			send:       make(chan Message, sendBuffer),
+			role:       role,
 		}
 		h.register(client)
 		go client.writePump()
