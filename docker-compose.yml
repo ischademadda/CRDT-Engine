@@ -90,5 +90,3 @@ services:
         condition: service_healthy
       analytics-db:
         condition: service_healthy
-
-
