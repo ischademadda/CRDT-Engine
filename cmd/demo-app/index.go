@@ -358,6 +358,100 @@ const indexHTML = `<!doctype html>
     font-weight: 600;
     color: var(--danger);
   }
+
+  /* Time Travel panel styles */
+  .time-travel-panel {
+    grid-column: span 2;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .time-travel-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 900px) {
+    .time-travel-panel { grid-column: span 1; }
+    .time-travel-layout { grid-template-columns: 1fr; }
+  }
+
+  .revision-log {
+    height: 250px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .revision-log::-webkit-scrollbar { width: 4px; }
+  .revision-log::-webkit-scrollbar-track { background: transparent; }
+  .revision-log::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 2px; }
+
+  .revision-item {
+    font-size: 13px;
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .revision-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent);
+  }
+
+  .revision-item.selected {
+    background: rgba(59, 130, 246, 0.1);
+    border-color: var(--accent);
+  }
+
+  .revision-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .revision-actor {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .revision-details {
+    color: var(--text-primary);
+  }
+
+  .revision-time {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  .preview-textarea {
+    width: 100%;
+    height: 250px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    color: var(--text-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 12px;
+    resize: none;
+  }
 </style>
 </head>
 <body>
@@ -421,6 +515,34 @@ const indexHTML = `<!doctype html>
         Подключитесь к документу для сбора метрик.
       </div>
     </div>
+
+    <!-- Панель Time Travel & История изменений -->
+    <div class="panel time-travel-panel" id="time-travel-panel" style="display: none;">
+      <div class="dashboard-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent);"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        История изменений & Time Travel (Event Sourcing)
+      </div>
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span id="slider-label" style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">Ревизия: 0 из 0</span>
+          <button id="checkout-btn" style="padding: 6px 12px; font-size: 12px;" disabled>Откатить редактор к этой версии</button>
+        </div>
+        <input type="range" id="time-slider" min="0" max="0" value="0" style="width: 100%; cursor: pointer;" />
+      </div>
+      <div class="time-travel-layout">
+        <div>
+          <span class="section-subtitle">Лог событий (Append-Only Event Store)</span>
+          <div id="revision-log" class="revision-log" style="margin-top: 8px;">
+            <!-- Сюда динамически рендерится история -->
+          </div>
+        </div>
+        <div>
+          <span class="section-subtitle">Просмотр исторического состояния</span>
+          <textarea id="history-preview" class="preview-textarea" style="margin-top: 8px;" placeholder="Переместите ползунок слайдера, чтобы увидеть состояние документа в этой точке времени..." readonly></textarea>
+        </div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -433,12 +555,20 @@ const indexHTML = `<!doctype html>
   const $analyticsContent = document.getElementById('analytics-content');
   const $analyticsOffline = document.getElementById('analytics-offline');
   const $leaderList       = document.getElementById('leader-list');
+  const $timeTravelPanel  = document.getElementById('time-travel-panel');
+  const $timeSlider       = document.getElementById('time-slider');
+  const $sliderLabel      = document.getElementById('slider-label');
+  const $revisionLog      = document.getElementById('revision-log');
+  const $historyPreview   = document.getElementById('history-preview');
+  const $checkoutBtn      = document.getElementById('checkout-btn');
 
   let ws = null;
   let suppressInput = false;
   let lastValue = '';
   let lastSyncedValue = '';
   let pollInterval = null;
+  let historyPollInterval = null;
+  let revisionsList = [];
 
   function setStatus(text, cls) {
     $status.textContent = text;
@@ -638,6 +768,147 @@ const indexHTML = `<!doctype html>
     $analyticsOffline.innerHTML = '<span>Аналитика отключена</span>Подключитесь к документу для сбора метрик.';
   }
 
+  function startHistoryPolling(doc) {
+    if (historyPollInterval) clearInterval(historyPollInterval);
+    
+    const poll = () => {
+      fetch('http://localhost:8083/api/history/' + encodeURIComponent(doc) + '/revisions')
+        .then(r => {
+          if (!r.ok) throw new Error();
+          return r.json();
+        })
+        .then(data => {
+          revisionsList = data || [];
+          $timeTravelPanel.style.display = 'flex';
+          updateTimeSlider();
+        })
+        .catch(() => {
+          $timeTravelPanel.style.display = 'none';
+        });
+    };
+    
+    poll();
+    historyPollInterval = setInterval(poll, 2000);
+  }
+
+  function stopHistoryPolling() {
+    if (historyPollInterval) {
+      clearInterval(historyPollInterval);
+      historyPollInterval = null;
+    }
+    $timeTravelPanel.style.display = 'none';
+    revisionsList = [];
+  }
+
+  function updateTimeSlider() {
+    const total = revisionsList.length;
+    const isDragging = document.activeElement === $timeSlider;
+    
+    if (!isDragging) {
+      $timeSlider.max = total;
+      if ($timeSlider.value == 0 || $timeSlider.value == total - 1 || $timeSlider.value == total) {
+        $timeSlider.value = total;
+      }
+    }
+    
+    updateSliderUI();
+  }
+
+  async function updateSliderUI() {
+    const currentVal = parseInt($timeSlider.value, 10);
+    const total = revisionsList.length;
+    
+    $sliderLabel.textContent = 'Ревизия: ' + currentVal + ' из ' + total;
+    $timeSlider.disabled = total === 0;
+    
+    renderRevisionLog(currentVal);
+    
+    if (currentVal === 0) {
+      $historyPreview.value = '';
+      $checkoutBtn.disabled = true;
+    } else if (currentVal === total) {
+      $historyPreview.value = $editor.value;
+      $checkoutBtn.disabled = true;
+    } else {
+      $checkoutBtn.disabled = false;
+      try {
+        const doc = $doc.value || 'demo';
+        const r = await fetch('http://localhost:8083/api/history/' + encodeURIComponent(doc) + '/checkout?version=' + currentVal);
+        if (r.ok) {
+          const j = await r.json();
+          $historyPreview.value = j.text || '';
+        }
+      } catch(_) {}
+    }
+  }
+
+  function renderRevisionLog(selectedVersion) {
+    $revisionLog.innerHTML = '';
+    if (revisionsList.length === 0) {
+      $revisionLog.innerHTML = '<div style="font-size: 12px; color: var(--text-secondary); text-align: center; padding: 12px;">Событий пока не зарегистрировано</div>';
+      return;
+    }
+    
+    for (let i = revisionsList.length - 1; i >= 0; i--) {
+      const rev = revisionsList[i];
+      const revNum = i + 1;
+      
+      const card = document.createElement('div');
+      card.className = 'revision-item' + (revNum === selectedVersion ? ' selected' : '');
+      card.dataset.version = revNum;
+      
+      let payload = {};
+      try {
+        payload = JSON.parse(rev.payload);
+      } catch(_) {
+        payload = rev.payload || {};
+      }
+      
+      let actor = 'system';
+      let details = '';
+      
+      if (rev.op_type === 'fugue_insert') {
+        actor = payload.NodeID ? payload.NodeID.ReplicaID : 'unknown';
+        const char = String.fromCodePoint(payload.Value || 32);
+        const charDisp = char === '\n' ? '↵ (Enter)' : char === ' ' ? '␣ (Space)' : '"' + char + '"';
+        details = 'вставил символ ' + charDisp;
+      } else if (rev.op_type === 'fugue_delete') {
+        actor = payload.SourceID ? payload.SourceID.ReplicaID : 'unknown';
+        details = 'удалил символ';
+      }
+      
+      const timeStr = new Date(rev.created_at).toLocaleTimeString();
+      
+      card.innerHTML = 
+        '<div class="revision-meta">' +
+          '<span class="avatar-badge" style="width:16px; height:16px; font-size:7px; ' + getAvatarStyle(actor) + '">' + actor.substring(0, 2).toUpperCase() + '</span>' +
+          '<span class="revision-actor">' + actor + '</span>' +
+          '<span class="revision-details">' + details + '</span>' +
+        '</div>' +
+        '<span class="revision-time">#' + revNum + ' @ ' + timeStr + '</span>';
+        
+      card.addEventListener('click', () => {
+        $timeSlider.value = revNum;
+        updateSliderUI();
+      });
+      
+      $revisionLog.appendChild(card);
+    }
+  }
+
+  $timeSlider.addEventListener('input', updateSliderUI);
+
+  $checkoutBtn.addEventListener('click', () => {
+    const historicalText = $historyPreview.value;
+    $editor.value = historicalText;
+    
+    const event = new Event('input', { bubbles: true });
+    $editor.dispatchEvent(event);
+    
+    $timeSlider.value = revisionsList.length;
+    updateSliderUI();
+  });
+
   $connect.addEventListener('click', () => {
     if (ws) { 
       ws.close(); 
@@ -645,6 +916,7 @@ const indexHTML = `<!doctype html>
       lastSyncedValue = '';
       lastValue = '';
       stopAnalyticsPolling();
+      stopHistoryPolling();
       return; 
     }
     const doc = $doc.value || 'demo';
@@ -657,17 +929,20 @@ const indexHTML = `<!doctype html>
       $editor.disabled = false;
       await refreshSnapshot(doc);
       startAnalyticsPolling(doc);
+      startHistoryPolling(doc);
       $connect.textContent = 'Отключиться';
     });
     ws.addEventListener('close', () => {
       setStatus('Отключен', 'err');
       $editor.disabled = true;
       stopAnalyticsPolling();
+      stopHistoryPolling();
       $connect.textContent = 'Подключиться';
     });
     ws.addEventListener('error', () => {
       setStatus('Ошибка', 'err');
       stopAnalyticsPolling();
+      stopHistoryPolling();
     });
     ws.addEventListener('message', (ev) => {
       try {
