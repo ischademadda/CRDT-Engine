@@ -9,6 +9,7 @@ const indexHTML = `<!doctype html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root {
     --bg-base: #090d16;
@@ -698,7 +699,8 @@ const indexHTML = `<!doctype html>
           <strong id="session-user" style="color: var(--text-primary);"></strong>
           (<span id="session-role" style="font-weight:600;"></span>)
         </span>
-        <button id="logout-btn" style="background:transparent; color:var(--danger); border:none; padding:0; cursor:pointer; font-size:12px; font-weight:600; margin-left:4px;">Выйти</button>
+        <button id="export-pdf-btn" style="background: var(--accent); color: white; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 11px; font-weight: 600; margin-left: 8px; transition: all 0.2s;">PDF Отчет</button>
+        <button id="logout-btn" style="background:transparent; color:var(--danger); border:none; padding:0; cursor:pointer; font-size:12px; font-weight:600; margin-left:12px;">Выйти</button>
       </div>
 
       <div class="form-group" style="display: none;">
@@ -1305,6 +1307,30 @@ const indexHTML = `<!doctype html>
         applyRemote(m.type, m.payload);
       } catch (_) {}
     });
+  }
+
+  const $exportPdfBtn = document.getElementById('export-pdf-btn');
+  $exportPdfBtn.addEventListener('click', () => {
+    const { jsPDF } = window.jspdf || {};
+    if (!jsPDF) {
+      alert("jsPDF библиотека не загрузилась. Открываем стандартную печать браузера.");
+      window.print();
+      return;
+    }
+    
+    const doc = new jsPDF();
+    
+    // Simple plain text document
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("courier", "normal");
+    doc.setFontSize(11);
+    
+    const textContent = $editor.value || '';
+    const splitText = doc.splitTextToSize(textContent, 180);
+    doc.text(splitText, 15, 20);
+    
+    const docName = $doc.value || 'demo';
+    doc.save(docName + ".pdf");
   });
 
   $editor.addEventListener('input', () => {
